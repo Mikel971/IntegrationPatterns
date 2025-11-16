@@ -6,7 +6,7 @@ date-released: 2025-11-16
 authors:
   - family-names: Arlegi
     given-names: Mikel
-    orcid: "https://orcid.org/0000-0000-0000-0000"  # ← reemplaza con tu ORCID si tienes uno
+    orcid: "https://orcid.org/0000-0001-5665-9275"  
 abstract: >
   R implementation to quantify and compare morphological integration patterns across species
   using two-block Partial Least Squares (PLS) and covariance angle comparison.

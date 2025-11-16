@@ -1,6 +1,6 @@
 # Integration Patterns
 
-This repository contains `Integration_Patterns`, an R implementation designed to quantify and compare morphological integration patterns across species using two-block Partial Least Squares (PLS) and within-species covariance structures.
+This repository contains `Integration_Patterns`, an R function designed to quantify and compare morphological integration patterns across species using two-block Partial Least Squares (PLS) and within-species covariance structures.
 
 The method extends the PLS approach implemented in the R package **Morpho** by:
 

@@ -22,7 +22,7 @@ This script depends on:
 
 - `Morpho` (for PLS); install with `install.packages("Morpho")`
 
-## Usage Example (Simulated Data with Five Species)
+## Usage Example (Simulated 3D Coordinates Data with Five Species)
 
 ```R
 library(Morpho)
@@ -74,10 +74,11 @@ The function returns a list containing:
 
 ## Citation
 
-If you use this function in your work, please cite:
+If you use this software, please cite it as:
 
-```
-Arlegi, M. (2025). Integration Patterns: Quantifying between-species differences in morphological integration using two-block PLS. GitHub. DOI: <to be added>
+Arlegi, M. (2025). *Integration Patterns: Quantifying between-species differences in morphological integration using two-block PLS* (Version 1.0.1). Zenodo. https://doi.org/10.5281/zenodo.17623869
+
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.17623869.svg)](https://doi.org/10.5281/zenodo.17623869)
 ```
 
 ## Licence

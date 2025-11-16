@@ -2,7 +2,6 @@ cff-version: 1.2.0
 message: "If you use this software, please cite it using the metadata below."
 title: "Integration Patterns"
 version: "1.0.0"
-doi: "10.5281/zenodo.XXXXXXX"  # ← reemplaza con tu DOI real si ya lo tienes, o bórralo por ahora
 date-released: 2025-11-16
 authors:
   - family-names: Arlegi

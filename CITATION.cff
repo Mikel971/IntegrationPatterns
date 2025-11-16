@@ -1,16 +1,14 @@
 cff-version: 1.2.0
-message: "If you use this software, please cite it as below."
-title: "Integration Patterns: Quantifying morphological integration differences across species using two-block PLS"
+message: "If you use this software, please cite it using the metadata below."
+title: "Integration Patterns"
+version: "1.0.0"
+doi: "10.5281/zenodo.XXXXXXX"  # ← reemplaza con tu DOI real si ya lo tienes, o bórralo por ahora
+date-released: 2025-11-16
 authors:
-  - family-names: "Arlegi"
-    given-names: "Mikel"
-date-released: 2025-02-13
-license: "GPL-3"
-repository-code: "https://github.com/Mikel971/IntegrationPatterns"
-preferred-citation:
-  type: software
-  authors:
-    - family-names: "Arlegi"
-      given-names: "Mikel"
-  title: "Integration Patterns"
-  year: "2025"
+  - family-names: Arlegi
+    given-names: Mikel
+    orcid: "https://orcid.org/0000-0000-0000-0000"  # ← reemplaza con tu ORCID si tienes uno
+abstract: >
+  R implementation to quantify and compare morphological integration patterns across species
+  using two-block Partial Least Squares (PLS) and covariance angle comparison.
+license: GPL-3.0

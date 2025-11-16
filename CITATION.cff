@@ -1,0 +1,16 @@
+cff-version: 1.2.0
+message: "If you use this software, please cite it as below."
+title: "Integration Patterns: Quantifying morphological integration differences across species using two-block PLS"
+authors:
+  - family-names: "Arlegi"
+    given-names: "Mikel"
+date-released: 2025-02-13
+license: "GPL-3"
+repository-code: "https://github.com/Mikel971/IntegrationPatterns"
+preferred-citation:
+  type: software
+  authors:
+    - family-names: "Arlegi"
+      given-names: "Mikel"
+  title: "Integration Patterns"
+  year: "2025"

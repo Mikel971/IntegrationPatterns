@@ -1,190 +1,348 @@
 ###############################################
-# Integration Patterns: Comparing morphological 
-# integration patterns across species using 
-# two-block PLS (Morpho::pls2B)
+# Integration_Patterns
+# Comparing morphological integration patterns across groups
 # Author: Mikel Arlegi
 # License: GPL-3
 ###############################################
 
-library(Morpho)
+#' Angular comparison of group-specific integration patterns from two-block PLS
+#'
+#' Performs a comparative analysis of morphological integration patterns among groups
+#' (e.g., species) using two-block partial least squares (PLS). The function estimates
+#' group-specific axes of covariation in a shared PLS space and quantifies their
+#' divergence using angular distances and permutation-based significance tests.
+#'
+#' The procedure first performs a pooled two-block PLS (\code{Morpho::pls2B}) on two
+#' matched data blocks (\code{X} and \code{Y}), which may be Procrustes shape coordinates
+#' (3D arrays, p x k x n) or other multivariate descriptors (matrices, n x variables).
+#' PLS1 scores are extracted for each block and used to define a common PLS1–PLS1 space.
+#' For each group, the covariance matrix of PLS1 scores is computed and its first
+#' eigenvector is taken as the dominant axis of covariation. Pairwise angular distances
+#' between these axes represent differences in integration patterns among groups.
+#'
+#' By default, the function performs pooled within-group PLS (\code{pooled_within = TRUE}),
+#' in which group means are removed prior to PLS estimation. This configuration removes
+#' between-group mean differences and focuses inference on within-group covariance
+#' structure. Alternatively, raw (non-centred) PLS can be performed
+#' (\code{pooled_within = FALSE}), so the PLS space reflects combined within- and
+#' between-group variation.
+#'
+#' Specimen correspondence between \code{X} and \code{Y} is required. If specimen
+#' identifiers are provided (dimnames on the 3rd dimension for arrays; rownames for
+#' matrices), \code{Y} is automatically reordered to match \code{X}. If identifiers are
+#' absent, the function assumes both blocks are already in identical order.
+#'
+#' Angular differences are assessed via permutation tests that pool individuals from
+#' each pair of groups and randomly reallocate them while preserving sample sizes,
+#' generating a null distribution under the hypothesis of no group-specific difference
+#' in integration axis orientation.
+#'
+#' @param X A 3D array (p x k x n) of Procrustes coordinates for the first module, or a
+#'   matrix (n x variables) of other multivariate descriptors (rows = specimens).
+#' @param Y A 3D array (p x k x n) for the second module, or a matrix (n x variables).
+#'   Must contain the same specimens as \code{X}. If specimen identifiers are present,
+#'   \code{Y} is reordered to match \code{X}.
+#' @param groups A factor or character vector of length \code{n} indicating group
+#'   membership for each specimen.
+#' @param pooled_within Logical. If \code{TRUE} (default), performs pooled within-group
+#'   PLS by centring variables within groups prior to PLS.
+#' @param n_perm Number of permutations used to assess angular differences.
+#' @param min_n Minimum sample size required per group to estimate covariance matrices.
+#' @details
+#' The function implements a geometric comparison of integration patterns by evaluating
+#' the orientation of group-specific covariation axes in PLS1–PLS1 space. For each group,
+#' the covariance matrix of PLS1 scores is computed and its first eigenvector is taken as
+#' the principal axis of covariation. Because eigenvectors represent axes rather than
+#' oriented vectors, sign is ignored and angular distances are computed as acute angles
+#' in the interval 0–90 degrees.
+#'
+#' Two analytical modes are available:
+#' \itemize{
+#'   \item When \code{pooled_within = TRUE} (default), group means are removed prior to PLS
+#'   estimation. This produces a pooled within-group PLS space reflecting the average
+#'   within-group covariation pattern, and angular comparisons test whether within-group
+#'   integration patterns are conserved across taxa independently of mean divergence.
+#'   \item When \code{pooled_within = FALSE}, PLS is performed on raw data without group
+#'   centring. The resulting space reflects combined within- and between-group variation,
+#'   and angular comparisons quantify differences in group-specific integration axes within
+#'   this mixed-variance space.
+#' }
+#'
+#' @return An object of class \code{"Integration_Patterns"} containing:
+#'   \itemize{
+#'     \item \code{pls}: The PLS result returned by \code{Morpho::pls2B}.
+#'     \item \code{scores}: Data frame of PLS1 scores with group labels.
+#'     \item \code{data_by_groups}: List of PLS1 score matrices per group.
+#'     \item \code{cov_matrices}: Within-group covariance matrices in PLS1–PLS1 space.
+#'     \item \code{eigen_results}: Eigenvectors and eigenvalues for each group.
+#'     \item \code{angle_matrix}: Matrix of pairwise angular distances (degrees).
+#'     \item \code{pval_matrix}: Matrix of permutation-based p-values.
+#'     \item \code{params}: List of function parameters used.
+#'     \item \code{call}: The matched call.
+#'   }
+#'
+#' @export
+#' @keywords multivariate morphometrics integration PLS
+#'
+#' @references
+#' Rohlf, F.J. & Corti, M. (2000). The use of two-block partial least-squares
+#' to study covariation in shape. Systematic Biology 49:740–753.
+#'
+#' Klingenberg, C.P. & Marugán-Lobón, J. (2013). Evolutionary covariation in
+#' geometric morphometric data. Systematic Biology 62:591–610.
+#'
+#' Schlager, S. (2017). Morpho and Rvcg – Shape analysis in R.
+#' In: Zheng, G., Li, S., Székely, G. (eds) Statistical Shape and Deformation Analysis.
+#' Academic Press.
+#'
+#' @author Mikel Arlegi
+#'
+#' @examples
+#' \dontrun{
+#' Hominoids <- readRDS("Hominoids.rds")
+#'
+#' res <- Integration_Patterns(
+#'   X = Hominoids$crania,
+#'   Y = Hominoids$C5_vertebrae,
+#'   groups = Hominoids$species,
+#'   pooled_within = TRUE,
+#'   n_perm = 999
+#' )
+#'
+#' res$angle_matrix
+#' res$pval_matrix
+#' }
 
-###############################################
-# Helper function: angle between principal axes 
-###############################################
-Integration_Patterns_angle <- function(cov_matrix1, cov_matrix2) { 
-  
-  if (!all(dim(cov_matrix1) == c(2, 2)) || !all(dim(cov_matrix2) == c(2, 2))) {
-    stop("Covariance matrices must be 2x2.")
-  }
-  
-  eigen1 <- eigen(cov_matrix1)
-  eigen2 <- eigen(cov_matrix2)
-  
-  v1 <- eigen1$vectors[, 1]
-  v2 <- eigen2$vectors[, 1]
-  
-  v1 <- v1 / sqrt(sum(v1^2))
-  v2 <- v2 / sqrt(sum(v2^2))
-  
-  cosine_similarity <- sum(v1 * v2)
-  cosine_similarity <- max(min(cosine_similarity, 1), -1)
-  
-  angle <- acos(abs(cosine_similarity)) * (180 / pi)
-  
-  list(
-    angle_degrees = angle,
-    cos_similarity = cosine_similarity,
-    eigenvector1  = v1,
-    eigenvector2  = v2,
-    eigenvalues1  = eigen1$values,
-    eigenvalues2  = eigen2$values
-  )
-}
-
-###############################################
-# Permutation test for the angle between species
-###############################################
-Integration_Patterns_permutation <- function(data1, data2, n_perm = 1000) {
-  
-  if (nrow(data1) < 3 || nrow(data2) < 3) {
-    warning("Low sample size in one species. Permutation test might be unreliable.")
-  }
-  
-  cov1_obs <- cov(data1)
-  cov2_obs <- cov(data2)
-  res_obs  <- Integration_Patterns_angle(cov1_obs, cov2_obs)
-  angle_obs <- res_obs$angle_degrees
-  
-  pooled <- rbind(data1, data2)
-  n1 <- nrow(data1)
-  n_total <- nrow(pooled)
-  
-  angles_perm <- numeric(n_perm)
-  
-  for (i in seq_len(n_perm)) {
-    idx <- sample(n_total)
-    group1 <- pooled[idx[1:n1], ]
-    group2 <- pooled[idx[(n1 + 1):n_total], ]
-    
-    angles_perm[i] <- Integration_Patterns_angle(cov(group1), cov(group2))$angle_degrees
-  }
-  
-  p_value <- mean(angles_perm >= angle_obs)
-  
-  list(
-    angle_observed = angle_obs,
-    angles_perm = angles_perm,
-    p_value = p_value
-  )
-}
-
-###############################################
-# Main pipeline function
-###############################################
 Integration_Patterns <- function(
   X, Y,
-  species,
-  rounds_pls = 0,
+  groups,
+  pooled_within = TRUE,
   n_perm = 1000,
   min_n = 3
 ) {
   
-  if (length(dim(X)) != 3 || length(dim(Y)) != 3) {
-    stop("X and Y must be 3D arrays (landmarks x dimensions x individuals).")
+  if (!requireNamespace("Morpho", quietly = TRUE)) {
+    stop("Package 'Morpho' is required but not installed.", call. = FALSE)
   }
   
-  if (dim(X)[3] != dim(Y)[3]) {
-    stop("X and Y must contain the same individuals in the same order.")
+  if (is.data.frame(X)) X <- as.matrix(X)
+  if (is.data.frame(Y)) Y <- as.matrix(Y)
+  
+  is_arrayX <- (length(dim(X)) == 3)
+  is_arrayY <- (length(dim(Y)) == 3)
+  is_matX   <- is.matrix(X)
+  is_matY   <- is.matrix(Y)
+  
+  if (!(is_arrayX || is_matX) || !(is_arrayY || is_matY)) {
+    stop("X and Y must be either 3D arrays (p x k x n) or matrices (n x variables).", call. = FALSE)
   }
   
-  n_ind <- dim(X)[3]
+  n_ind_X <- if (is_arrayX) dim(X)[3] else nrow(X)
+  n_ind_Y <- if (is_arrayY) dim(Y)[3] else nrow(Y)
   
-  if (length(species) != n_ind) {
-    stop("Length of species vector must match number of individuals.")
+  if (n_ind_X != n_ind_Y) {
+    stop("X and Y must contain the same number of specimens (same n).", call. = FALSE)
   }
   
-  pls_res <- Morpho::pls2B(X, Y, rounds = rounds_pls)
+  n_ind <- n_ind_X
+  if (length(groups) != n_ind) {
+    stop("Length of groups must match the number of specimens (n).", call. = FALSE)
+  }
   
-  scores_X <- pls_res$Xscores[, 1]
-  scores_Y <- pls_res$Yscores[, 1]
+  if (any(is.na(groups))) {
+    stop("'groups' contains missing values.", call. = FALSE)
+  }
+  
+  if (length(unique(groups)) < 2) {
+    stop("'groups' must contain at least two groups.", call. = FALSE)
+  }
+  
+  groups <- as.character(groups)
+  group_levels <- sort(unique(groups))
+  
+  ### Reorder by specimen identifiers
+  if (is_arrayX && !is.null(dimnames(X)[[3]]) && !is.null(dimnames(Y)[[3]])) {
+    
+    id_x <- trimws(dimnames(X)[[3]])
+    id_y <- trimws(dimnames(Y)[[3]])
+    
+    if (anyDuplicated(id_x) > 0 || anyDuplicated(id_y) > 0) {
+      stop("Duplicate specimen identifiers detected in X or Y (3rd dimension).", call. = FALSE)
+    }
+    if (!setequal(id_x, id_y)) {
+      stop("Mismatched specimen identifiers between X and Y (3rd dimension).", call. = FALSE)
+    }
+    
+    Y <- Y[, , match(id_x, id_y), drop = FALSE]
+    dimnames(Y)[[3]] <- dimnames(X)[[3]]
+    
+  } else if (is_matX && !is.null(rownames(X)) && !is.null(rownames(Y))) {
+    
+    id_x <- trimws(rownames(X))
+    id_y <- trimws(rownames(Y))
+    
+    if (anyDuplicated(id_x) > 0 || anyDuplicated(id_y) > 0) {
+      stop("Duplicate specimen identifiers detected in X or Y (rownames).", call. = FALSE)
+    }
+    if (!setequal(id_x, id_y)) {
+      stop("Mismatched specimen identifiers between X and Y (rownames).", call. = FALSE)
+    }
+    
+    Y <- Y[match(id_x, id_y), , drop = FALSE]
+    rownames(Y) <- rownames(X)
+  }
+  
+  X_use <- X
+  Y_use <- Y
+  
+  ### Pooled within-group
+  if (isTRUE(pooled_within)) {
+    
+    for (gr in group_levels) {
+      idx <- which(groups == gr)
+      if (length(idx) == 0) next
+      
+      if (is_arrayX) {
+        mean_X <- apply(X[,,idx, drop = FALSE], c(1, 2), mean)
+        for (ii in idx) X_use[,,ii] <- X[,,ii] - mean_X
+      } else {
+        mu_X <- colMeans(X[idx, , drop = FALSE])
+        X_use[idx, ] <- sweep(X[idx, , drop = FALSE], 2, mu_X, "-")
+      }
+      
+      if (is_arrayY) {
+        mean_Y <- apply(Y[,,idx, drop = FALSE], c(1, 2), mean)
+        for (ii in idx) Y_use[,,ii] <- Y[,,ii] - mean_Y
+      } else {
+        mu_Y <- colMeans(Y[idx, , drop = FALSE])
+        Y_use[idx, ] <- sweep(Y[idx, , drop = FALSE], 2, mu_Y, "-")
+      }
+    }
+  }
+  
+  pls_res <- Morpho::pls2B(X_use, Y_use, rounds = 0)
   
   df <- data.frame(
-    species = species,
-    score_X = scores_X,
-    score_Y = scores_Y,
+    groups = groups,
+    score_X = pls_res$Xscores[, 1],
+    score_Y = pls_res$Yscores[, 1],
     stringsAsFactors = FALSE
   )
   
-  species_levels <- sort(unique(species))
+  data_by_groups <- vector("list", length(group_levels))
+  cov_matrices    <- vector("list", length(group_levels))
+  eigen_results   <- vector("list", length(group_levels))
+  names(data_by_groups) <- names(cov_matrices) <- names(eigen_results) <- group_levels
   
-  data_by_species <- list()
-  cov_matrices <- list()
-  eigen_results <- list()
-  
-  for (sp in species_levels) {
-    sp_data <- subset(df, species == sp, select = c("score_X", "score_Y"))
-    m <- as.matrix(sp_data)
-    data_by_species[[sp]] <- m
+  for (gr in group_levels) {
+    
+    idx <- which(df$groups == gr)
+    m <- as.matrix(df[idx, c("score_X", "score_Y"), drop = FALSE])
+    data_by_groups[[gr]] <- m
     
     if (nrow(m) < min_n) {
-      cov_matrices[[sp]] <- NA
-      eigen_results[[sp]] <- NA
+      cov_matrices[[gr]]  <- NA
+      eigen_results[[gr]] <- NA
     } else {
       cov_m <- cov(m)
-      cov_matrices[[sp]] <- cov_m
+      cov_matrices[[gr]] <- cov_m
+      
       e <- eigen(cov_m)
-      v1 <- e$vectors[, 1] / sqrt(sum(e$vectors[, 1]^2))
-      eigen_results[[sp]] <- list(
+      v1 <- e$vectors[, 1]
+      v1 <- v1 / sqrt(sum(v1^2))
+      
+      eigen_results[[gr]] <- list(
         eigenvector1 = v1,
-        eigenvalues = e$values
+        eigenvalues  = e$values
       )
     }
   }
   
-  n_sp <- length(species_levels)
-  angle_matrix <- matrix(NA, n_sp, n_sp, dimnames = list(species_levels, species_levels))
-  pval_matrix  <- matrix(NA, n_sp, n_sp, dimnames = list(species_levels, species_levels))
+  n_gr <- length(group_levels)
+  angle_matrix <- matrix(NA_real_, n_gr, n_gr, dimnames = list(group_levels, group_levels))
+  pval_matrix  <- matrix(NA_real_, n_gr, n_gr, dimnames = list(group_levels, group_levels))
+  diag(angle_matrix) <- 0
   
-  for (i in seq_len(n_sp)) {
-    for (j in seq_len(n_sp)) {
-      sp_i <- species_levels[i]
-      sp_j <- species_levels[j]
+  for (i in seq_len(n_gr - 1)) {
+    
+    gr_i <- group_levels[i]
+    if (is.na(cov_matrices[[gr_i]])[1]) next
+    
+    for (j in (i + 1):n_gr) {
       
-      if (i == j) {
-        angle_matrix[i, j] <- 0
-        pval_matrix[i, j]  <- NA
-        next
+      gr_j <- group_levels[j]
+      if (is.na(cov_matrices[[gr_j]])[1]) next
+      
+      cov1 <- cov_matrices[[gr_i]]
+      cov2 <- cov_matrices[[gr_j]]
+      
+      e1 <- eigen(cov1)
+      e2 <- eigen(cov2)
+      
+      v1 <- e1$vectors[, 1]
+      v2 <- e2$vectors[, 1]
+      v1 <- v1 / sqrt(sum(v1^2))
+      v2 <- v2 / sqrt(sum(v2^2))
+      
+      cs <- sum(v1 * v2)
+      cs <- max(min(cs, 1), -1)
+      angle_obs <- acos(abs(cs)) * (180 / pi)
+      
+      angle_matrix[i, j] <- angle_obs
+      
+      data1 <- data_by_groups[[gr_i]]
+      data2 <- data_by_groups[[gr_j]]
+      
+      pooled <- rbind(data1, data2)
+      n1 <- nrow(data1)
+      n_total <- nrow(pooled)
+      
+      angles_perm <- numeric(n_perm)
+      
+      for (pp in seq_len(n_perm)) {
+        idxp <- sample.int(n_total)
+        
+        g1 <- pooled[idxp[1:n1], , drop = FALSE]
+        g2 <- pooled[idxp[(n1 + 1):n_total], , drop = FALSE]
+        
+        eg1 <- eigen(cov(g1))
+        eg2 <- eigen(cov(g2))
+        
+        vg1 <- eg1$vectors[, 1]
+        vg2 <- eg2$vectors[, 1]
+        
+        vg1 <- vg1 / sqrt(sum(vg1^2))
+        vg2 <- vg2 / sqrt(sum(vg2^2))
+        
+        cs_p <- sum(vg1 * vg2)
+        cs_p <- max(min(cs_p, 1), -1)
+        
+        angles_perm[pp] <- acos(abs(cs_p)) * (180 / pi)
       }
       
-      if (is.na(cov_matrices[[sp_i]])[1] || is.na(cov_matrices[[sp_j]])[1]) {
-        angle_matrix[i, j] <- NA
-        pval_matrix[i, j]  <- NA
-        next
-      }
-      
-      angle_res <- Integration_Patterns_angle(cov_matrices[[sp_i]], cov_matrices[[sp_j]])
-      angle_matrix[i, j] <- angle_res$angle_degrees
-      
-      perm_res <- Integration_Patterns_permutation(
-        data_by_species[[sp_i]],
-        data_by_species[[sp_j]],
-        n_perm = n_perm
-      )
-      pval_matrix[i, j] <- perm_res$p_value
+      pval_matrix[i, j] <- (1 + sum(angles_perm >= angle_obs)) / (1 + n_perm)
     }
   }
   
   angle_matrix[lower.tri(angle_matrix)] <- t(angle_matrix)[lower.tri(angle_matrix)]
-  pval_matrix[lower.tri(pval_matrix)]  <- t(pval_matrix)[lower.tri(pval_matrix)]
+  pval_matrix[lower.tri(pval_matrix)]   <- t(pval_matrix)[lower.tri(pval_matrix)]
   
-  list(
-    pls  = pls_res,
+  out <- list(
+    pls = pls_res,
     scores = df,
-    data_by_species = data_by_species,
+    data_by_groups = data_by_groups,
     cov_matrices = cov_matrices,
     eigen_results = eigen_results,
     angle_matrix = angle_matrix,
     pval_matrix  = pval_matrix,
-    params = list(rounds_pls = rounds_pls, n_perm = n_perm, min_n = min_n)
+    params = list(
+      pooled_within = pooled_within,
+      n_perm = n_perm,
+      min_n = min_n
+    ),
+    call = match.call()
   )
+  
+  class(out) <- "Integration_Patterns"
+  out
 }
